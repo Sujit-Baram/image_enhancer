@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Image Enhancer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <span class="brand">✨ Image Enhancer</span>
+    <span class="badge" id="status-badge">checking backend…</span>
+  </header>
+
+  <main class="layout">
+
+    <section class="panel upload-panel">
+      <h1>Enhance a Photo</h1>
+      <p class="sub">Uploaded to the <code>backend</code> container, processed with <code>sharp</code>, saved to a persistent volume.</p>
+
+      <form id="enhance-form">
+        <label class="dropzone" for="file-input">
+          <input type="file" id="file-input" accept="image/*" required />
+          <span id="dropzone-label">Click to choose an image</span>
+        </label>
+
+        <div class="controls">
+          <label>Width (px)
+            <input type="number" id="width" value="800" min="50" max="4000" />
+          </label>
+          <label>Brightness
+            <input type="range" id="brightness" min="0.5" max="2" step="0.05" value="1.15" />
+            <span id="brightness-val">1.15</span>
+          </label>
+          <label>Saturation
+            <input type="range" id="saturation" min="0" max="3" step="0.05" value="1.25" />
+            <span id="saturation-val">1.25</span>
+          </label>
+          <label class="checkbox-label">
+            <input type="checkbox" id="sharpen" checked />
+            Sharpen
+          </label>
+        </div>
+
+        <button type="submit" id="submit-btn">Enhance Image</button>
+      </form>
+
+      <p id="result-message"></p>
+    </section>
+
+    <section class="panel gallery-panel">
+      <h2>Recent Enhancements</h2>
+      <p class="sub">Loaded from the volume — refresh the page or restart the container, they're still here.</p>
+      <div class="gallery" id="gallery">
+        <p class="empty-state">No enhanced images yet — upload one to get started.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <footer class="footer">
+    <p>Frontend (Nginx) → <code>/api/*</code> → reverse-proxied to the <code>backend</code> service by name, over the Compose bridge network.</p>
+  </footer>
+
+<script src="app.js"></script>
+</body>
+</html>

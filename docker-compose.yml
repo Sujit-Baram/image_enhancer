@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:16-alpine        # off-the-shelf service -> image:, not build:
+    container_name: image-enhancer-db
+    environment:
+      - POSTGRES_DB=image_enhancer
+      - POSTGRES_USER=app_user
+      - POSTGRES_PASSWORD=app_password
+    volumes:
+      - db-data:/var/lib/postgresql/data   # named volume — the DB's own persistence
+    networks:
+      - enhancer-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d image_enhancer"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend                  # our own code -> build:, not image:
+    container_name: image-enhancer-backend
+    environment:
+      - PORT=3000
+      - UPLOAD_DIR=/app/uploads
+      - DB_HOST=db                    # resolved by Compose service-name DNS
+      - DB_PORT=5432
+      - DB_NAME=image_enhancer
+      - DB_USER=app_user
+      - DB_PASSWORD=app_password
+    volumes:
+      - enhanced-images:/app/uploads
+    networks:
+      - enhancer-net
+    depends_on:
+      db:
+        condition: service_healthy    # wait for Postgres to be ACTUALLY ready, not just started
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: image-enhancer-frontend
+    ports:
+      - "8080:80"
+    networks:
+      - enhancer-net
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+networks:
+  enhancer-net:
+    driver: bridge
+
+volumes:
+  enhanced-images:
+  db-data:

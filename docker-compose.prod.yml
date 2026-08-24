@@ -1,0 +1,17 @@
+# Production override — deploy with:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# This does NOT replace docker-compose.yml — Compose merges the two files.
+# Only the frontend service changes: it now publishes port 443 too, and
+# bind-mounts the real Nginx config (with HTTPS) plus Certbot's certificate
+# and webroot directories from the HOST straight into the container.
+
+services:
+  frontend:
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./frontend/nginx.prod.conf:/etc/nginx/conf.d/default.conf:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /var/www/certbot:/var/www/certbot:ro

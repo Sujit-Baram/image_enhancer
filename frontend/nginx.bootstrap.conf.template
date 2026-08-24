@@ -1,0 +1,36 @@
+# Image Enhancer — CERTBOT BOOTSTRAP Nginx config
+#
+# Use this ONLY for the very first deployment, BEFORE a certificate exists.
+# nginx.prod.conf.template's 443 block references certificate files that
+# don't exist yet on a brand-new server — Nginx would refuse to start at
+# all if you used that file first. This bootstrap config is HTTP-only,
+# so Nginx starts fine and can serve Certbot's HTTP-01 challenge.
+#
+# Once you've obtained a certificate (Part D, Step 4 of the guide), you
+# switch to nginx.prod.conf and never need this file again — except for
+# future renewals, which reuse the certificate already on disk.
+
+server {
+    listen 80;
+    server_name YOUR_DOMAIN;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        root /usr/share/nginx/html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://backend:3000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        client_max_body_size 20M;
+    }
+
+    location /enhanced/ {
+        proxy_pass http://backend:3000/enhanced/;
+    }
+}
