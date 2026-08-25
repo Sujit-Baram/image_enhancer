@@ -20,7 +20,7 @@ frontend (Nginx) ── /api/* ──▶ backend (Node.js + Express + sharp)
 
 ## The Full Lifecycle This Project Covers
 
-| Stage | Where |
+| Stage | Where | TEST-PROJECT
 |---|---|
 | Write the Dockerfile | `backend/Dockerfile` (multi-stage), `frontend/Dockerfile` |
 | Build the image | `docker build` / `docker compose build` |
