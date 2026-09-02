@@ -1,0 +1,310 @@
+pipeline {
+
+    agent {
+        label 'youre-agent-name'
+    }
+
+    environment {
+
+        // =========================
+        // GIT
+        // =========================
+        REPO_URL    = 'https://github.com/Sujit-Baram/image_enhancer.git'
+        BRANCH      = 'main'
+        GIT_CRED_ID = 'github-token'
+
+        // =========================
+        // DOCKER HUB
+        // =========================
+        DOCKERHUB_USERNAME = 'your_dockerhub_name'
+
+        BACKEND_IMAGE  = "${DOCKERHUB_USERNAME}/image-enhancer-backend"
+        FRONTEND_IMAGE = "${DOCKERHUB_USERNAME}/image-enhancer-frontend"
+
+        // =========================
+        // DEPLOYMENT SERVER
+        // =========================
+        DEPLOY_USER = 'deploy_user'
+        DEPLOY_HOST = 'accoding_your_server'
+
+        DEPLOY_DIR = '/home/deploy_user/image-enhancer'
+
+        // Jenkins build number
+        IMAGE_TAG = "${BUILD_NUMBER}"
+    }
+
+    stages {
+
+        // ============================================================
+        // AGENT / DOCKER CHECK
+        // ============================================================
+
+        stage('Agent & Docker Check') {
+            steps {
+                sh '''
+                    set -e
+
+                    echo "======================================"
+                    echo "AGENT INFORMATION"
+                    echo "======================================"
+
+                    echo "User:"
+                    whoami
+
+                    echo ""
+                    echo "User ID / Groups:"
+                    id
+
+                    echo ""
+                    echo "Docker version:"
+                    docker --version
+
+                    echo ""
+                    echo "Docker access:"
+                    docker ps
+
+                    echo ""
+                    echo "Docker login check:"
+                    docker info >/dev/null
+
+                    echo ""
+                    echo "Agent Docker access is OK"
+                '''
+            }
+        }
+
+        // ============================================================
+        // CI
+        // ============================================================
+
+        stage('Clean Workspace') {
+            steps {
+                cleanWs()
+            }
+        }
+
+        stage('Checkout Git') {
+            steps {
+
+                echo "======================================"
+                echo "CHECKOUT SOURCE CODE"
+                echo "======================================"
+
+                git branch: "${BRANCH}",
+                    credentialsId: "${GIT_CRED_ID}",
+                    url: "${REPO_URL}"
+            }
+        }
+
+        stage('Build Backend Image') {
+            steps {
+
+                echo "======================================"
+                echo "BUILD BACKEND IMAGE"
+                echo "======================================"
+
+                sh '''
+                    set -e
+
+                    docker build \
+                        -f backend/Dockerfile \
+                        -t ${BACKEND_IMAGE}:${IMAGE_TAG} \
+                        -t ${BACKEND_IMAGE}:latest \
+                        backend/
+                '''
+            }
+        }
+
+        stage('Build Frontend Image') {
+            steps {
+
+                echo "======================================"
+                echo "BUILD FRONTEND IMAGE"
+                echo "======================================"
+
+                sh '''
+                    set -e
+
+                    docker build \
+                        -f frontend/Dockerfile \
+                        -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \
+                        -t ${FRONTEND_IMAGE}:latest \
+                        frontend/
+                '''
+            }
+        }
+
+        stage('Push Images to Docker Hub') {
+            steps {
+
+                echo "======================================"
+                echo "PUSH DOCKER IMAGES"
+                echo "======================================"
+
+                sh '''
+                    set -e
+
+                    echo "Pushing backend image..."
+
+                    docker push ${BACKEND_IMAGE}:${IMAGE_TAG}
+                    docker push ${BACKEND_IMAGE}:latest
+
+                    echo ""
+                    echo "Pushing frontend image..."
+
+                    docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}
+                    docker push ${FRONTEND_IMAGE}:latest
+
+                    echo ""
+                    echo "Docker images pushed successfully."
+                '''
+            }
+        }
+
+        // ============================================================
+        // CD
+        // ============================================================
+
+        stage('Deploy Using Docker Compose') {
+            steps {
+
+                echo "======================================"
+                echo "DEPLOYMENT"
+                echo "======================================"
+
+                echo "Server: ${DEPLOY_HOST}"
+
+                // Create deployment directory
+                sh '''
+                    ssh -o StrictHostKeyChecking=no \
+                        ${DEPLOY_USER}@${DEPLOY_HOST} \
+                        "mkdir -p ${DEPLOY_DIR}"
+                '''
+
+                // Copy compose file
+                sh '''
+                    scp -o StrictHostKeyChecking=no \
+                        docker-compose.dockerhub.yml \
+                        ${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_DIR}/docker-compose.dockerhub.yml
+                '''
+
+                // Deploy
+                sh '''
+                    ssh -o StrictHostKeyChecking=no \
+                        ${DEPLOY_USER}@${DEPLOY_HOST} \
+                        "bash -s" <<EOF
+
+set -e
+
+cd ${DEPLOY_DIR}
+
+echo "======================================"
+echo "UPDATING DOCKER COMPOSE"
+echo "======================================"
+
+echo ""
+echo "Original compose file:"
+cat docker-compose.dockerhub.yml
+
+echo ""
+echo "Replacing backend image..."
+
+sed -i \
+"s|image: mydockeruser/image-enhancer-backend:latest|image: ${BACKEND_IMAGE}:${IMAGE_TAG}|g" \
+docker-compose.dockerhub.yml
+
+echo ""
+echo "Replacing frontend image..."
+
+sed -i \
+"s|image: mydockeruser/image-enhancer-frontend:latest|image: ${FRONTEND_IMAGE}:${IMAGE_TAG}|g" \
+docker-compose.dockerhub.yml
+
+echo ""
+echo "Updated compose file:"
+cat docker-compose.dockerhub.yml
+
+echo ""
+echo "======================================"
+echo "PULLING DOCKER IMAGES"
+echo "======================================"
+
+docker compose \
+    -f docker-compose.dockerhub.yml \
+    pull
+
+echo ""
+echo "======================================"
+echo "STARTING APPLICATION"
+echo "======================================"
+
+docker compose \
+    -f docker-compose.dockerhub.yml \
+    up -d
+
+echo ""
+echo "======================================"
+echo "CONTAINERS"
+echo "======================================"
+
+docker compose \
+    -f docker-compose.dockerhub.yml \
+    ps
+
+echo ""
+echo "======================================"
+echo "DEPLOYMENT COMPLETED"
+echo "======================================"
+
+EOF
+                '''
+            }
+        }
+    }
+
+    // ================================================================
+    // POST
+    // ================================================================
+
+    post {
+
+        success {
+            echo """
+            ======================================
+            CI/CD SUCCESSFUL
+            ======================================
+
+            Backend :
+            ${BACKEND_IMAGE}:${IMAGE_TAG}
+
+            Frontend:
+            ${FRONTEND_IMAGE}:${IMAGE_TAG}
+
+            Deployment Server:
+            ${DEPLOY_HOST}
+
+            ======================================
+            """
+        }
+
+        failure {
+            echo """
+            ======================================
+            CI/CD FAILED
+            ======================================
+
+            Check Jenkins console output.
+
+            ======================================
+            """
+        }
+
+        always {
+            sh '''
+                docker image prune -f || true
+            '''
+
+            cleanWs()
+        }
+    }
+}
